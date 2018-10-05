@@ -1,0 +1,64 @@
+{
+  "name": "@foxify/inject",
+  "version": "1.0.0",
+  "description": "Fake HTTP injection library",
+  "author": "Ardalan Amini <ardalanamini22@gmail.com> [https://github.com/ardalanamini]",
+  "license": "MIT",
+  "homepage": "https://github.com/foxifyjs/inject#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/foxifyjs/inject.git"
+  },
+  "bugs": {
+    "url": "https://github.com/foxifyjs/inject/issues"
+  },
+  "keywords": [
+    "http",
+    "inject",
+    "fake",
+    "request",
+    "server"
+  ],
+  "engines": {
+    "node": ">=8"
+  },
+  "types": "dist/index.d.ts",
+  "main": "dist/index.js",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run lint && npm run test && npm run build",
+    "lint": "tslint -p tsconfig.json -c tslint.json --exclude '**/*.d.ts'",
+    "test": "jest",
+    "coverage": "npm test -- --coverage",
+    "codecov": "npm run coverage -- --runInBand && codecov"
+  },
+  "dependencies": {
+    "readable-stream": "^3.0.6"
+  },
+  "devDependencies": {
+    "@types/jest": "^23.3.3",
+    "@types/node": "^10.11.4",
+    "codecov": "^3.1.0",
+    "jest": "^23.6.0",
+    "ts-jest": "^23.10.3",
+    "tslint": "^5.11.0",
+    "tslint-config-airbnb": "^5.11.0",
+    "typescript": "^3.1.1"
+  },
+  "jest": {
+    "moduleFileExtensions": [
+      "ts",
+      "js",
+      "node"
+    ],
+    "transform": {
+      "^.+\\.ts$": "ts-jest"
+    },
+    "testMatch": [
+      "<rootDir>/test/**/*\\.ts"
+    ]
+  }
+}
