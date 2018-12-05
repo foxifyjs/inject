@@ -51,9 +51,14 @@ const inject = (dispatch, options, callback) => {
     };
     req._read = function _read() {
         setImmediate(() => {
+            if (this._inject.isDone) {
+                this.push(null);
+                return;
+            }
             if (this._inject.body) {
                 this.push(this._inject.body);
             }
+            this._inject.isDone = true;
             this.emit("close");
             this.push(null);
         });
