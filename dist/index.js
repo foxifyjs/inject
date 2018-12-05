@@ -16,6 +16,7 @@ const inject = (dispatch, options, callback) => {
     if (typeof options === "string")
         options = { url: options };
     const opts = Object.assign({ IncomingMessage: http.IncomingMessage, ServerResponse: http.ServerResponse, headers: {}, method: "GET", remoteAddress: "127.0.0.1" }, options);
+    opts.method = opts.method.toUpperCase();
     let body = opts.body || null;
     if (body) {
         if (typeof body !== "string") {
@@ -48,31 +49,41 @@ const inject = (dispatch, options, callback) => {
     req.connection = {
         remoteAddress: opts.remoteAddress,
     };
-    // req._read = function _read() {
-    //   setImmediate(() => {
-    //     if ((this as any)._inject.body) {
-    //       this.push((this as any)._inject.body);
-    //     }
-    //     this.emit("close");
-    //     this.push(null);
-    //   });
-    // };
+    req._read = function _read() {
+        setImmediate(() => {
+            if (this._inject.body) {
+                this.push(this._inject.body);
+            }
+            this.emit("close");
+            this.push(null);
+        });
+    };
     const res = new opts.ServerResponse(req);
     res.assignSocket(socket);
+    res._inject = {
+        bodyChinks: [],
+        headers: {},
+    };
+    res._headers = {};
+    const resWrite = res.write;
+    res.write = function write(data, encoding, cb) {
+        resWrite.call(this, data, encoding, cb);
+        this._inject.bodyChinks
+            .push(Buffer.from(data, typeof encoding === "string" ? encoding : "utf8"));
+        return true;
+    };
     const resEnd = res.end;
     res.end = function end(chunk, encoding, cb) {
         if (chunk && typeof chunk !== "function")
-            this.body = chunk;
-        else
-            this.body = "";
-        resEnd.call(res, chunk, encoding, cb);
+            this.write(chunk, encoding);
+        resEnd.call(this, chunk, encoding, cb);
         this.emit("finish");
     };
     if (callback) {
         res.once("error", callback);
         res.connection.once("error", callback);
         const cb = () => callback(null, {
-            body: res.body,
+            body: Buffer.concat(res._inject.bodyChinks).toString(),
             headers: res.getHeaders(),
             raw: {
                 req,
@@ -88,7 +99,7 @@ const inject = (dispatch, options, callback) => {
         res.once("error", reject);
         res.connection.once("error", reject);
         const cb = () => resolve({
-            body: res.body,
+            body: Buffer.concat(res._inject.bodyChinks).toString(),
             headers: res.getHeaders(),
             raw: {
                 req,

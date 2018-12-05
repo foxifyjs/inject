@@ -106,9 +106,16 @@ const inject = (
 
   req._read = function _read() {
     setImmediate(() => {
+      if ((this as any)._inject.isDone) {
+        this.push(null);
+        return;
+      }
+
       if ((this as any)._inject.body) {
         this.push((this as any)._inject.body);
       }
+
+      (this as any)._inject.isDone = true;
 
       this.emit("close");
 
