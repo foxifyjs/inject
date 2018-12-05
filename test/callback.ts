@@ -115,19 +115,20 @@ test("returns payload 6", () => {
   });
 });
 
-// test("returns payload 7", () => {
-//   expect.assertions(3);
+test("returns payload 7", (done) => {
+  expect.assertions(3);
 
-//   const dispatch = (req: http.IncomingMessage, res: http.ServerResponse) => {
-//     res.writeHead(200, { "content-type": req.headers["content-type"] });
-//     req.pipe(res);
-//   };
+  const dispatch = (req: http.IncomingMessage, res: http.ServerResponse) => {
+    res.writeHead(200, { "Content-Type": req.headers["content-type"] });
+    req.pipe(res);
+  };
 
-//   const body = { hello: "world" };
+  const body = { hello: "world" };
 
-//   inject(dispatch, { body, method: "POST", url: "/hello" }, (err, res) => {
-//     expect(err).toBe(null);
-//     expect(res.headers["content-type"]).toBe("application/json");
-//     expect(res.body).toBe(JSON.stringify(body));
-//   });
-// });
+  inject(dispatch, { body, method: "POST", url: "/hello" }, (err, res) => {
+    expect(err).toBe(null);
+    expect(res.headers["content-type"]).toBe("application/json");
+    expect(res.body).toBe(JSON.stringify(body));
+    done();
+  });
+});

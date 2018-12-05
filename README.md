@@ -33,6 +33,7 @@ const dispatch = function (req, res) {
   res.end(reply)
 }
 
+// Nah, you don't need this anymore :)
 // const server = http.createServer(dispatch)
 
 inject(dispatch, { method: 'get', url: '/' }, (err, res) => {

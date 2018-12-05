@@ -56,6 +56,8 @@ const inject = (
     ...options,
   };
 
+  opts.method = opts.method.toUpperCase();
+
   let body = opts.body || null;
   if (body) {
     if (typeof body !== "string") {
@@ -102,21 +104,40 @@ const inject = (
     remoteAddress: opts.remoteAddress,
   } as any;
 
-  // req._read = function _read() {
-  //   setImmediate(() => {
-  //     if ((this as any)._inject.body) {
-  //       this.push((this as any)._inject.body);
-  //     }
+  req._read = function _read() {
+    setImmediate(() => {
+      if ((this as any)._inject.body) {
+        this.push((this as any)._inject.body);
+      }
 
-  //     this.emit("close");
+      this.emit("close");
 
-  //     this.push(null);
-  //   });
-  // };
+      this.push(null);
+    });
+  };
 
   const res = new opts.ServerResponse(req);
 
   res.assignSocket(socket);
+
+  (res as any)._inject = {
+    bodyChinks: [],
+    headers: {},
+  };
+
+  (res as any)._headers = {};
+
+  const resWrite = res.write;
+  res.write = function write(
+    data: any,
+    encoding?: string | ((error: Error | null | undefined) => void),
+    cb?: (error: Error | null | undefined) => void,
+  ) {
+    resWrite.call(this, data, encoding as any, cb);
+    (this as any)._inject.bodyChinks
+      .push(Buffer.from(data, typeof encoding === "string" ? encoding : "utf8"));
+    return true;
+  };
 
   const resEnd = res.end;
   res.end = function end(
@@ -124,10 +145,9 @@ const inject = (
     encoding?: string | (() => void),
     cb?: () => void,
   ) {
-    if (chunk && typeof chunk !== "function") (this as any).body = chunk;
-    else (this as any).body = "";
+    if (chunk && typeof chunk !== "function") this.write(chunk, encoding as any);
 
-    resEnd.call(res, chunk, encoding, cb);
+    resEnd.call(this, chunk, encoding as any, cb);
 
     this.emit("finish");
   };
@@ -137,7 +157,7 @@ const inject = (
     res.connection.once("error", callback);
 
     const cb = () => callback(null, {
-      body: (res as any).body,
+      body: Buffer.concat((res as any)._inject.bodyChinks).toString(),
       headers: res.getHeaders(),
       raw: {
         req,
@@ -157,7 +177,7 @@ const inject = (
     res.connection.once("error", reject);
 
     const cb = () => resolve({
-      body: (res as any).body,
+      body: Buffer.concat((res as any)._inject.bodyChinks).toString(),
       headers: res.getHeaders(),
       raw: {
         req,

@@ -1,6 +1,6 @@
 {
   "name": "@foxify/inject",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Fake HTTP injection library",
   "author": "Ardalan Amini <ardalanamini22@gmail.com> [https://github.com/ardalanamini]",
   "license": "MIT",
@@ -39,14 +39,14 @@
     "readable-stream": "^3.0.6"
   },
   "devDependencies": {
-    "@types/jest": "^23.3.3",
-    "@types/node": "^10.11.4",
+    "@types/jest": "^23.3.10",
+    "@types/node": "^10.12.12",
     "codecov": "^3.1.0",
     "jest": "^23.6.0",
-    "ts-jest": "^23.10.3",
+    "ts-jest": "^23.10.5",
     "tslint": "^5.11.0",
-    "tslint-config-airbnb": "^5.11.0",
-    "typescript": "^3.1.1"
+    "tslint-config-airbnb": "^5.11.1",
+    "typescript": "^3.2.1"
   },
   "jest": {
     "moduleFileExtensions": [
