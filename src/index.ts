@@ -83,7 +83,7 @@ const inject = (
   const uri = Url.parse(opts.url);
   req.url = uri.path;
 
-  req.headers = opts.headers;
+  req.headers = opts.headers || {};
 
   req.headers["user-agent"] = req.headers["user-agent"] || `foxify-inject/${version}`;
 
@@ -100,14 +100,16 @@ const inject = (
   };
   req.headers.host = req.headers.host || hostHeaderFromUri() || "localhost:80";
 
-  req.connection = {
-    remoteAddress: opts.remoteAddress,
-  } as any;
+  (req.connection as any).remoteAddress = opts.remoteAddress;
+  // req.connection = {
+  //   remoteAddress: opts.remoteAddress,
+  // } as any;
 
   req._read = function _read() {
     setImmediate(() => {
       if ((this as any)._inject.isDone) {
         this.push(null);
+
         return;
       }
 
@@ -117,7 +119,7 @@ const inject = (
 
       (this as any)._inject.isDone = true;
 
-      this.emit("close");
+      // this.emit("close");
 
       this.push(null);
     });
@@ -163,7 +165,7 @@ const inject = (
     res.once("error", callback);
     res.connection.once("error", callback);
 
-    const cb = () => callback(null, {
+    res.once("finish", () => callback(null, {
       body: Buffer.concat((res as any)._inject.bodyChinks).toString(),
       headers: res.getHeaders(),
       raw: {
@@ -172,9 +174,7 @@ const inject = (
       },
       statusCode: res.statusCode,
       statusMessage: res.statusMessage,
-    });
-
-    res.once("finish", cb);
+    }));
 
     return dispatch(req, res) as any;
   }
@@ -183,7 +183,7 @@ const inject = (
     res.once("error", reject);
     res.connection.once("error", reject);
 
-    const cb = () => resolve({
+    res.once("finish", () => resolve({
       body: Buffer.concat((res as any)._inject.bodyChinks).toString(),
       headers: res.getHeaders(),
       raw: {
@@ -192,9 +192,7 @@ const inject = (
       },
       statusCode: res.statusCode,
       statusMessage: res.statusMessage,
-    });
-
-    res.once("finish", cb);
+    }));
 
     dispatch(req, res);
   });
