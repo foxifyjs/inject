@@ -1,5 +1,10 @@
-// tslint:disable:ter-arrow-parens
-import * as http from "http";
+import {
+  IncomingHttpHeaders,
+  IncomingMessage,
+  OutgoingHttpHeader,
+  OutgoingHttpHeaders,
+  ServerResponse,
+} from "http";
 import { Writable } from "readable-stream";
 import * as Url from "url";
 import { version } from "../package.json";
@@ -12,49 +17,25 @@ function getNullSocket() {
   });
 }
 
-namespace inject {
-  export type Dispatch = (req: http.IncomingMessage, res: http.ServerResponse) => void;
-
-  export interface Options {
-    url: string;
-    method?: string;
-    IncomingMessage?: typeof http.IncomingMessage;
-    ServerResponse?: typeof http.ServerResponse;
-    headers?: http.IncomingHttpHeaders;
-    remoteAddress?: string;
-    body?: string | object;
-  }
-
-  export type Callback = (err: Error | null, res: Response) => void;
-
-  export interface Response {
-    raw: {
-      req: http.IncomingMessage;
-      res: http.ServerResponse;
-    };
-    headers: http.OutgoingHttpHeaders;
-    statusCode: number;
-    statusMessage: string;
-    body: string;
-  }
-}
-
-const inject = (
-  dispatch: inject.Dispatch,
-  options: inject.Options | string,
-  callback?: inject.Callback,
-): Promise<inject.Response> => {
+export default function inject<
+  Request extends IncomingMessage = IncomingMessage,
+  Response extends ServerResponse = ServerResponse
+>(
+  dispatch: DispatchT<Request, Response>,
+  options: OptionsI | string,
+  callback?: CallbackT<Request, Response>,
+): Promise<InjectResultI<Request, Response>> {
   // tslint:disable-next-line:no-parameter-reassignment
   if (typeof options === "string") options = { url: options };
 
   const opts = {
-    IncomingMessage: http.IncomingMessage,
-    ServerResponse: http.ServerResponse,
-    headers: {} as http.IncomingHttpHeaders,
+    Request: IncomingMessage,
+    Response: ServerResponse,
+    headers: {} as IncomingHttpHeaders,
     method: "GET",
     remoteAddress: "127.0.0.1",
     ...options,
-  };
+  } as Required<OptionsI>;
 
   opts.method = opts.method.toUpperCase();
 
@@ -63,7 +44,8 @@ const inject = (
     if (typeof body !== "string") {
       body = JSON.stringify(body);
 
-      opts.headers["content-type"] = opts.headers["content-type"] || "application/json";
+      opts.headers["content-type"] =
+        opts.headers["content-type"] || "application/json";
     }
 
     opts.headers["content-length"] = Buffer.byteLength(body).toString();
@@ -71,21 +53,25 @@ const inject = (
 
   const socket = getNullSocket();
 
-  const req = new opts.IncomingMessage(socket);
+  const req = new opts.Request(socket as any) as Request;
 
   (req as any)._inject = {
     body,
     isDone: false,
   };
 
+  // readonly
   req.method = opts.method;
 
   const uri = Url.parse(opts.url);
-  req.url = uri.path;
+  // readonly
+  req.url = uri.path!;
 
+  // readonly
   req.headers = opts.headers || {};
 
-  req.headers["user-agent"] = req.headers["user-agent"] || `foxify-inject/${version}`;
+  req.headers["user-agent"] =
+    req.headers["user-agent"] || `foxify-inject/${version}`;
 
   const hostHeaderFromUri = () => {
     if (uri.port) {
@@ -100,10 +86,7 @@ const inject = (
   };
   req.headers.host = req.headers.host || hostHeaderFromUri() || "localhost:80";
 
-  (req.connection as any).remoteAddress = opts.remoteAddress;
-  // req.connection = {
-  //   remoteAddress: opts.remoteAddress,
-  // } as any;
+  (req.socket as any).remoteAddress = opts.remoteAddress;
 
   req._read = function _read() {
     setImmediate(() => {
@@ -125,77 +108,134 @@ const inject = (
     });
   };
 
-  const res = new opts.ServerResponse(req);
+  const res = new opts.Response(req) as Response;
 
-  res.assignSocket(socket);
+  res.assignSocket(socket as any);
 
   (res as any)._inject = {
     bodyChinks: [],
     headers: {},
   };
 
-  (res as any)._headers = {};
+  // (res as any)._headers = {};
+
+  const resWriteHead: any = res.writeHead;
+  res.writeHead = function writeHead(
+    statusCode: number,
+    reasonPhrase?: string | OutgoingHttpHeaders | OutgoingHttpHeader[],
+    headers?: OutgoingHttpHeaders | OutgoingHttpHeader[],
+  ) {
+    let hdrs = headers;
+
+    if (typeof reasonPhrase !== "string") hdrs = reasonPhrase;
+
+    if (hdrs && !Array.isArray(hdrs)) {
+      Object.keys(hdrs).forEach(header =>
+        this.setHeader(header, (hdrs as any)[header]),
+      );
+    }
+
+    return resWriteHead.call(this, statusCode, reasonPhrase, headers);
+  };
 
   const resWrite = res.write;
   res.write = function write(
     data: any,
-    encoding?: string | ((error: Error | null | undefined) => void),
+    encoding?: BufferEncoding | ((error: Error | null | undefined) => void),
     cb?: (error: Error | null | undefined) => void,
   ) {
-    resWrite.call(this, data, encoding as any, cb);
-    (this as any)._inject.bodyChinks
-      .push(Buffer.from(data, typeof encoding === "string" ? encoding : "utf8"));
+    resWrite.call(this, data, encoding as BufferEncoding, cb);
+    (this as any)._inject.bodyChinks.push(
+      Buffer.from(data, typeof encoding === "string" ? encoding : "utf8"),
+    );
     return true;
   };
 
   const resEnd = res.end;
   res.end = function end(
     chunk?: string | (() => void),
-    encoding?: string | (() => void),
+    encoding?: BufferEncoding | (() => void),
     cb?: () => void,
   ) {
-    if (chunk && typeof chunk !== "function") this.write(chunk, encoding as any);
+    if (chunk && typeof chunk !== "function")
+      this.write(chunk, encoding as BufferEncoding);
 
-    resEnd.call(this, chunk, encoding as any, cb);
+    resEnd.call(this, chunk, encoding as BufferEncoding, cb);
 
     this.emit("finish");
   };
 
   if (callback) {
     res.once("error", callback);
-    res.connection.once("error", callback);
+    res.socket!.once("error", callback);
 
-    res.once("finish", () => callback(null, {
-      body: Buffer.concat((res as any)._inject.bodyChinks).toString(),
-      headers: res.getHeaders(),
-      raw: {
-        req,
-        res,
-      },
-      statusCode: res.statusCode,
-      statusMessage: res.statusMessage,
-    }));
+    res.once("finish", () =>
+      callback(null, {
+        body: Buffer.concat((res as any)._inject.bodyChinks).toString(),
+        headers: res.getHeaders(),
+        raw: {
+          req,
+          res,
+        },
+        statusCode: res.statusCode,
+        statusMessage: res.statusMessage,
+      }),
+    );
 
     return dispatch(req, res) as any;
   }
 
   return new Promise((resolve, reject) => {
     res.once("error", reject);
-    res.connection.once("error", reject);
+    res.socket!.once("error", reject);
 
-    res.once("finish", () => resolve({
-      body: Buffer.concat((res as any)._inject.bodyChinks).toString(),
-      headers: res.getHeaders(),
-      raw: {
-        req,
-        res,
-      },
-      statusCode: res.statusCode,
-      statusMessage: res.statusMessage,
-    }));
+    res.once("finish", () =>
+      resolve({
+        body: Buffer.concat((res as any)._inject.bodyChinks).toString(),
+        headers: res.getHeaders(),
+        raw: {
+          req,
+          res,
+        },
+        statusCode: res.statusCode,
+        statusMessage: res.statusMessage,
+      }),
+    );
 
     dispatch(req, res);
   });
-};
+}
 
-export = inject;
+export type DispatchT<
+  Request extends IncomingMessage,
+  Response extends ServerResponse
+> = (req: Request, res: Response) => void;
+
+export interface OptionsI {
+  url: string;
+  method?: string;
+  Request?: typeof IncomingMessage;
+  Response?: typeof ServerResponse;
+  headers?: IncomingHttpHeaders;
+  remoteAddress?: string;
+  body?: string | Record<string, unknown>;
+}
+
+export interface InjectResultI<
+  Request extends IncomingMessage,
+  Response extends ServerResponse
+> {
+  raw: {
+    req: Request;
+    res: Response;
+  };
+  headers: OutgoingHttpHeaders;
+  statusCode: number;
+  statusMessage: string;
+  body: string;
+}
+
+export type CallbackT<
+  Request extends IncomingMessage,
+  Response extends ServerResponse
+> = (err: Error | null, res: InjectResultI<Request, Response>) => void;

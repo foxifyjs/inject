@@ -25,7 +25,7 @@ Does not use a socket connection so can be run against an inactive server (serve
 
 ```javascript
 const http = require('http')
-const inject = require('@foxify/inject')
+const inject = require('@foxify/inject').default
 
 const dispatch = function (req, res) {
   const reply = 'Hello World'

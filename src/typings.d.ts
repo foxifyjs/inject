@@ -1,10 +1,8 @@
 declare module "*/package.json" {
-  const package: {
-    name: string
-    version: string
-  }
+  const pkg: {
+    name: string;
+    version: string;
+  };
 
-  export = package
+  export = pkg;
 }
-
-declare module "readable-stream"

@@ -1,15 +1,18 @@
-import * as http from "http";
-import * as inject from "../src";
+import { IncomingMessage, ServerResponse } from "http";
+import inject from "../src";
 
 test("returns payload", async () => {
   expect.assertions(4);
 
   const output = "example.com:8080|/hello";
 
-  const dispatch = (req: http.IncomingMessage, res: http.ServerResponse) => {
+  const dispatch = (req: IncomingMessage, res: ServerResponse) => {
     res.statusMessage = "Super";
     res.setHeader("x-extra", "hello");
-    res.writeHead(200, { "Content-Type": "text/plain", "Content-Length": output.length });
+    res.writeHead(200, {
+      "Content-Type": "text/plain",
+      "Content-Length": output.length,
+    });
     res.end(`${req.headers.host}|${req.url}`);
   };
 
