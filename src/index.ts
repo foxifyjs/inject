@@ -153,6 +153,7 @@ export default function inject<
 
   const resEnd = res.end;
   res.end = function end(
+    this: Response,
     chunk?: string | (() => void),
     encoding?: BufferEncoding | (() => void),
     cb?: () => void,
@@ -163,7 +164,7 @@ export default function inject<
     resEnd.call(this, chunk, encoding as BufferEncoding, cb);
 
     this.emit("finish");
-  };
+  } as never;
 
   if (callback) {
     res.once("error", callback);
